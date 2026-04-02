@@ -1,0 +1,8 @@
+# Backend for Groq + DB + migrations
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv
+.env
