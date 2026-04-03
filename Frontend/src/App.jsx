@@ -9,6 +9,8 @@ function App() {
   const [input, setInput] = useState("");
   const [imageBase64, setImageBase64] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  const [pdfBase64, setPdfBase64] = useState(null);
+  const [pdfFilename, setPdfFilename] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -92,73 +94,102 @@ function App() {
   }
 
   async function handleSend() {
-    if ((!input.trim() && !imageBase64) || loading) return;
+    if ((!input.trim() && !imageBase64 && !pdfBase64) || loading) return;
 
-    let chatId = selectedChatId;
-    if (!chatId) {
-      const response = await fetch(`${API_BASE_URL}/api/chats`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: "New chat" }),
-      });
-      if (!response.ok) {
-        setLoading(false);
-        setError("Unable to create chat.");
-        return;
-      }
-      const chat = await response.json();
-      chatId = chat.id;
-      setSelectedChatId(chatId);
-    }
-
-    const draftUserMessage = {
-      id: Date.now(),
-      chat_id: chatId,
-      role: "user",
-      content: input,
-      image_base64: imageBase64,
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, draftUserMessage]);
-    const sentText = input;
-    const sentImage = imageBase64;
-    setInput("");
-    setImageBase64(null);
-    setImagePreview(null);
     setLoading(true);
 
-    const response = await fetch(`${API_BASE_URL}/api/chats/${chatId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: sentText, image_base64: sentImage }),
-    });
+    try {
+      let chatId = selectedChatId;
+      if (!chatId) {
+        const response = await fetch(`${API_BASE_URL}/api/chats`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "New chat" }),
+        });
+        if (!response.ok) {
+          setError("Unable to create chat.");
+          setLoading(false);
+          return;
+        }
+        const chat = await response.json();
+        chatId = chat.id;
+        setSelectedChatId(chatId);
+      }
 
-    if (response.ok) {
-      const pair = await response.json();
-      setMessages((prev) => [...prev.slice(0, -1), ...pair]);
-      await loadChats();
-      setSelectedChatId(chatId);
-      setError("");
-    } else {
+      const draftUserMessage = {
+        id: Date.now(),
+        chat_id: chatId,
+        role: "user",
+        content: input.trim() || "[Attachment message]",
+        image_base64: imageBase64,
+        pdf_filename: pdfFilename || null,
+        created_at: new Date().toISOString(),
+      };
+
+      setMessages((prev) => [...prev, draftUserMessage]);
+      const sentText = input;
+      const sentImage = imageBase64;
+      const sentPdf = pdfBase64;
+      const sentPdfFilename = pdfFilename;
+
+      setInput("");
+      setImageBase64(null);
+      setImagePreview(null);
+      setPdfBase64(null);
+      setPdfFilename("");
+
+      const response = await fetch(`${API_BASE_URL}/api/chats/${chatId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: sentText,
+          image_base64: sentImage,
+          pdf_base64: sentPdf,
+          pdf_filename: sentPdfFilename,
+        }),
+      });
+
+      if (response.ok) {
+        const pair = await response.json();
+        setMessages((prev) => [...prev.slice(0, -1), ...pair]);
+        await loadChats();
+        setSelectedChatId(chatId);
+        setError("");
+      } else {
+        setMessages((prev) => prev.slice(0, -1));
+        const errorText = await response.text();
+        alert(`Failed to send message: ${errorText}`);
+      }
+    } catch {
       setMessages((prev) => prev.slice(0, -1));
-      const errorText = await response.text();
-      alert(`Failed to send message: ${errorText}`);
+      setError("Unable to send message.");
     }
 
     setLoading(false);
   }
 
-  async function onImageSelected(event) {
+  async function onFileSelected(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const previewUrl = URL.createObjectURL(file);
-    setImagePreview(previewUrl);
-
     const base64 = await toBase64(file);
     const cleanedBase64 = String(base64).split(",")[1];
-    setImageBase64(cleanedBase64);
+
+    if (file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfBase64(cleanedBase64);
+      setPdfFilename(file.name);
+      setImageBase64(null);
+      setImagePreview(null);
+      return;
+    }
+
+    if (file.type.startsWith("image/")) {
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreview(previewUrl);
+      setImageBase64(cleanedBase64);
+      setPdfBase64(null);
+      setPdfFilename("");
+    }
   }
 
   return (
@@ -191,6 +222,9 @@ function App() {
           {messages.map((msg) => (
             <div key={msg.id} className={`message ${msg.role}`}>
               {msg.content}
+              {msg.pdf_filename && msg.role === "user" && (
+                <div style={{ marginTop: 8, fontSize: 13 }}>PDF: {msg.pdf_filename}</div>
+              )}
               {msg.image_base64 && msg.role === "user" && (
                 <img
                   className="upload-preview"
@@ -209,9 +243,9 @@ function App() {
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask something..."
+            placeholder="Ask something about text, image, or PDF..."
           />
-          <input type="file" accept="image/*" onChange={onImageSelected} />
+          <input type="file" accept="image/*,application/pdf" onChange={onFileSelected} />
           <button onClick={handleSend}>Send</button>
         </div>
 
@@ -221,6 +255,12 @@ function App() {
             <div>
               <img className="upload-preview" src={imagePreview} alt="Selected preview" />
             </div>
+          </div>
+        )}
+
+        {pdfFilename && (
+          <div style={{ padding: "0 14px 14px" }}>
+            <strong>Selected PDF:</strong> {pdfFilename}
           </div>
         )}
       </main>

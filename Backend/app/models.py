@@ -25,6 +25,7 @@ class Message(Base):
     role: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     image_base64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pdf_filename: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     chat = relationship("ChatSession", back_populates="messages")

@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.groq_client import ask_groq
 from app.models import ChatSession, Message
+from app.pdf_service import ask_groq_with_pdf
 from app.schemas import ChatCreate, ChatOut, ChatWithMessages, MessageCreate, MessageOut
 
 app = FastAPI(title="Chatbot Backend")
@@ -61,22 +62,39 @@ def send_message(chat_id: int, payload: MessageCreate, db: Session = Depends(get
     if not chat:
         raise HTTPException(status_code=404, detail="Chat not found")
 
+    has_text = bool(payload.content and payload.content.strip())
+    has_image = bool(payload.image_base64)
+    has_pdf = bool(payload.pdf_base64)
+
+    if not (has_text or has_image or has_pdf):
+        raise HTTPException(status_code=400, detail="Message must include text, image, or PDF.")
+
+    user_content = payload.content.strip() if has_text else "[Attachment message]"
     user_message = Message(
         chat_id=chat_id,
         role="user",
-        content=payload.content,
+        content=user_content,
         image_base64=payload.image_base64,
+        pdf_filename=payload.pdf_filename,
     )
     db.add(user_message)
     db.flush()
 
     if chat.title == "New chat":
-        chat.title = payload.content[:40] if payload.content else "Image chat"
+        if has_text:
+            chat.title = user_content[:40]
+        elif payload.pdf_filename:
+            chat.title = payload.pdf_filename[:40]
+        else:
+            chat.title = "Image chat"
     chat.updated_at = datetime.now(timezone.utc)
 
     try:
-        ai_content = ask_groq(payload.content, payload.image_base64)
-    except Exception as exc:
+        if has_pdf:
+            ai_content = ask_groq_with_pdf(user_content, payload.pdf_base64 or "")
+        else:
+            ai_content = ask_groq(user_content, payload.image_base64)
+    except Exception as exc:  # noqa: BLE001
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Groq request failed: {exc}")
 

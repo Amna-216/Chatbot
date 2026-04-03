@@ -18,8 +18,10 @@ class ChatOut(BaseModel):
 
 
 class MessageCreate(BaseModel):
-    content: str
+    content: str = ""
     image_base64: str | None = None
+    pdf_base64: str | None = None
+    pdf_filename: str | None = None
 
 
 class MessageOut(BaseModel):
@@ -28,6 +30,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     image_base64: str | None
+    pdf_filename: str | None
     created_at: datetime
 
     class Config:
