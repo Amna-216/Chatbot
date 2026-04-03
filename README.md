@@ -20,11 +20,12 @@ docker compose up --build
 ```
 
 Services:
-- Frontend: http://localhost:5173
 - Backend: http://localhost:8000
 - Backend health: http://localhost:8000/health
 - Adminer: http://localhost:8080
 - PostgreSQL: localhost:5432
+
+Frontend is not started by Docker. Run it locally from `Frontend` with `npm run dev`.
 
 ## Adminer Login
 - System: `PostgreSQL`
@@ -33,20 +34,19 @@ Services:
 - Password: `postgres`
 - Database: `chatbot_db`
 
-## Local Run (Without Docker)
-Backend:
+## Frontend Local Run
+```bash
+cd Frontend
+npm install
+npm run dev
+```
+
+## Backend Local Run (Optional Instead of Docker)
 ```bash
 cd Backend
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Frontend:
-```bash
-cd Frontend
-npm install
-npm run dev
 ```
 
 ## Migration

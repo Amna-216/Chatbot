@@ -33,17 +33,5 @@ services:
     depends_on:
       - db
 
-  frontend:
-    build:
-      context: ./Frontend
-    container_name: chatbot_frontend
-    restart: unless-stopped
-    env_file:
-      - ./Frontend/.env
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
-
 volumes:
   postgres_data:
