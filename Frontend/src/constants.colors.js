@@ -11,6 +11,5 @@ export const COLORS = {
 
   card: "#FFFFFF",
   border: "#E5E7EB",
-
   white: "#FFFFFF",
 };
